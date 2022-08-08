@@ -1,0 +1,506 @@
+---
+title: "Joe Biden Twitter Analysis"
+author: "Irmak Çırak-Deniz Serbes-Didem Taşpınar"
+date: "23 01 2021"
+output: html_document
+---
+Kullanilacak Kutuphaneler
+```{r message=FALSE, warning=FALSE}
+library(httpuv)
+library(rtweet)
+library(tidyverse)
+library(ROAuth)
+library(ggplot2)
+library(wordcloud)
+library(tm)
+library(twitteR)
+library(dplyr)
+library(lubridate)
+library(RCurl)
+library(FactoMineR)# Coklu Yazısma Analızı
+library(tm) #metin madenciligi icin
+```
+
+https://developer.twitter.com Sitesi Uzerinden Kayit islemleri ile veri cekmek icin kullanacagimiz sifreleri aldik ve Twitter Erisimi icin R'a okuttuk
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+consumer_key<-"OlKYY3FAqRRJhvejC8jSZM7b5"
+consumer_secret<-"TfQGTStvdVteaSSn2SDvnL6Jih8h23O11yJgNMR7lAFb2Mjkej"
+access_token<-"1696735537-tE7E8w1HsbJuPQe1ws30PQwKIMzNwfqTLG1Gooc"
+access_secret<-"PjbGSdPBJE1hplSId4CwPoiuhbzjU8OxRGRCKkhKvNfk0"
+setup_twitter_oauth(consumer_key,
+                    consumer_secret,
+                    access_token,
+                    access_secret)
+```
+
+Artik Tweet Cekmeye haziriz. 
+```{r}
+Rusya<-userTimeline("KremlinRussia_E",n=500)
+rusonc<-Rusya[48:400]
+russ<-Rusya[1:48]
+
+
+Ukrayna <- userTimeline("ZelenskyyUa", n=1000)
+ukö<-Ukrayna[471:1000]
+uks<-Ukrayna[226:470]
+
+#Rusya devlet başkanının en son attığı tweet 15 mart tarihinde olduğundan ukrayna devlet başkanınında 15 marta kadar olan tweetlerini aldık ki aynı dönemde gelen tepkileri inceleyebilelim. yani savaş sonrası dönem 23 şubat-15 mart arasıolarak alınmıştır.
+```
+
+Cektigimiz Tweetleri R'a ve Bilgisayara(csv olarak) kaydedelim
+```{r}
+tweets = twitteR::twListToDF(rusonc)
+save(rusonc,file ="rusonc.RData")
+write.csv(tweets,file ="rusonc.csv")
+rusonc <- read.csv("rusonc.csv")
+
+rusonc <- rusonc %>%
+  mutate_at(vars(text), as.character)
+
+
+tweets1 = twitteR::twListToDF(russ)
+save(russ,file ="russ.RData")
+write.csv(tweets1,file ="russ.csv")
+russ <- read.csv("russ.csv")
+
+russ <- russ %>%
+  mutate_at(vars(text), as.character)
+
+----------------------------------------------------
+tweets2 = twitteR::twListToDF(ukö)
+save(ukö,file ="ukö.RData")
+write.csv(tweets2,file ="ukö.csv")
+ukö <- read.csv("ukö.csv")
+
+ukö <- ukö %>%
+  mutate_at(vars(text), as.character)
+
+tweets3 = twitteR::twListToDF(uks)
+save(uks,file ="uks.RData")
+write.csv(tweets3,file ="uks.csv")
+uks <- read.csv("uks.csv")
+
+uks <- uks %>%
+  mutate_at(vars(text), as.character)
+
+#hepsini csv olarak kaydettik
+
+
+
+```
+Tweetlerin İsim ve Ozetlerine Bakalim
+
+```{r}
+#ısımler
+names(russ)
+```
+```{r}
+#ozet
+summary(russ)
+summary(rusonc)
+summary(ukö)
+```
+
+Elimizdeki Tweet verisini gelecek islemler icin duzenleyelim
+
+
+
+```{r message=FALSE, warning=FALSE}
+russ1<- rownames_to_column(russ) %>% 
+  select(created,favoriteCount,retweetCount)
+russ2<-russ1 %>% 
+  mutate(etkilesim=(favoriteCount+retweetCount)/2)%>% 
+  gather(etkilesim, deger,-created)
+
+###
+
+uks1<- rownames_to_column(uks) %>% 
+  select(created,favoriteCount,retweetCount)
+uks2<-uks1 %>% 
+  mutate(etkilesim=(favoriteCount+retweetCount)/2)%>% 
+  gather(etkilesim, deger,-created)
+
+```
+
+Tweetlerin aldığı etkileşimelere bakalım
+```{r}
+ggplot(data=russ2,mapping = aes(created,deger,color=etkilesim)) + geom_jitter(aes(size=4,alpha=0,25))+ labs(x="",y="",title = "Rusya'nın Savaş Sonrası Etkileşim Grafiği")+ theme_minimal(base_size = 12)
+
+ggplot(data=uks2,mapping = aes(created,deger,color=etkilesim)) + geom_jitter(aes(size=4,alpha=0,25))+ labs(x="",y="",title = "Ukrayna'nın Savaş Sonrası Etkileşim Grafiği")+ theme_minimal(base_size = 12)
+
+#iki grafiği aynı anda çıkarmak için olan formülü bul
+```
+
+Kullanılan Platformlar
+```{r}
+uks$statusSource = substr(uks$statusSource, regexpr(">", uks$statusSource) + 1, regexpr("</a>", uks$statusSource) -  1)
+ggplot(uks, aes(x=statusSource), fill()) +
+  geom_bar() +
+  labs(title="Twitter platforms by @JoeBiden") +
+  ylab(label="Number of tweets") +
+  xlab(label="Type of platform")
+```
+```{r}
+rusonc$statusSource = substr(rusonc$statusSource, regexpr(">", rusonc$statusSource) + 1, regexpr("</a>", rusonc$statusSource) -  1)
+ggplot(rusonc, aes(x=statusSource), fill()) +
+  geom_bar() +
+  labs(title="Twitter platforms by @JoeBiden") +
+  ylab(label="Number of tweets") +
+  xlab(label="Type of platform")
+```
+
+
+##Duygu Analizi
+```{r}
+library(syuzhet)
+tweets_rusonc <- iconv(rusonc$text)
+s <- get_nrc_sentiment(tweets_rusonc)
+head(s)
+```
+```{r}
+tweets_russ <- iconv(russ$text)
+s1 <- get_nrc_sentiment(tweets_russ)
+head(s1)
+```
+```{r}
+tweets_ukö <- iconv(ukö$text)
+s2 <- get_nrc_sentiment(tweets_ukö)
+head(s2)
+```
+```{r}
+tweets_uks <- iconv(uks$text)
+s3 <- get_nrc_sentiment(tweets_uks)
+head(s3)
+
+```
+
+```{r}
+get_nrc_sentiment('delay')
+par(mfrow=c(1,2))
+
+barplot(colSums(s/353),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Rusya Savaş Öncesi")
+
+barplot(colSums(s1/48),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Rusya Savaş Sonrası")
+```
+Duygu Analizi BarPlot
+
+
+```{r}
+par(mfrow=c(1,2))
+barplot(colSums(s2/530),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Ukrayna Savaş Öncesi")
+barplot(colSums(s3/245),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Ukrayna Savaş Sonrası")
+```
+
+
+
+
+
+
+
+```{r}
+barplot(colSums(s),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Rusya'nın Savaş Öncesi Duygu Analızı")
+```
+```{r}
+par(mfrow=c(2,2))
+
+barplot(colSums(s/353),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Rusya'nın Savaş Öncesi Duygu Analızı")
+
+barplot(colSums(s1/48),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Rusya'nın Savaş Sonrası Duygu Analızı")
+barplot(colSums(s2/530),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Ukrayna'nın Savaş Öncesi Duygu Analızı")
+barplot(colSums(s3/245),
+        las = 2,
+        col = rainbow(8),
+        ylab = 'Count',
+        main = "Ukrayna'nın Savaş Sonrası Duygu Analızı")
+
+```
+
+```{r}
+tweet_text <- rusonc$text
+head(tweet_text)
+```
+Her Tweetin NRC duyarlilik puanlarini cikariyoruz
+```{r}
+nrc_data <- get_nrc_sentiment(tweet_text)
+```
+
+
+Kizgin Tweetler
+```{r}
+angry_items <- which(nrc_data$anger >= 1)
+tweet_text[angry_items] %>% head()
+```
+Beklenti Tweetleri
+```{r}
+anticipation_items <- which(nrc_data$anticipation >= 3)
+tweet_text[anticipation_items] %>% head()
+```
+
+Igrenc Tweetler
+```{r}
+disgust_items <- which(nrc_data$disgust >= 3)
+tweet_text[disgust_items] %>% head()
+```
+Korku Tweetleri
+```{r}
+fear_items <- which(nrc_data$fear >= 3)
+tweet_text[fear_items] %>% head()
+```
+Sevinc Tweetleri
+```{r}
+joy_items <- which(nrc_data$joy >= 3)
+tweet_text[joy_items] %>% head()
+```
+Uzgun Tweetler
+```{r}
+sadness_items <- which(nrc_data$sadness >= 3)
+tweet_text[sadness_items] %>% head()
+```
+Supriz Tweetler
+```{r}
+surprise_items <- which(nrc_data$surprise >= 3)
+tweet_text[surprise_items] %>% head()
+```
+Guven Tweetleri
+```{r}
+trust_items <- which(nrc_data$trust >= 3)
+tweet_text[trust_items] %>% head()
+```
+
+
+## Tweet Temizleme
+```{r}
+library(tidytext)
+
+reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+tweet_words <- tweets %>%
+  filter(!str_detect(text, '^"')) %>%
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+  unnest_tokens(word, text, token = "regex", pattern = reg) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+#############################################
+
+reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+tweet_words1 <- tweets1 %>%
+  filter(!str_detect(text, '^"')) %>%
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+  unnest_tokens(word, text, token = "regex", pattern = reg) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+#############################################
+
+reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+tweet_words2 <- tweets2 %>%
+  filter(!str_detect(text, '^"')) %>%
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+  unnest_tokens(word, text, token = "regex", pattern = reg) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+#############################################
+reg <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+tweet_words3 <- tweets3 %>%
+  filter(!str_detect(text, '^"')) %>%
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", "")) %>%
+  unnest_tokens(word, text, token = "regex", pattern = reg) %>%
+  filter(!word %in% stop_words$word,
+         str_detect(word, "[a-z]"))
+
+
+```
+```{r}
+##corupus temızleme
+mycorpus <- VCorpus(VectorSource(tweets$text))
+mycorpus1 <- VCorpus(VectorSource(tweets1$text))
+mycorpus2 <- VCorpus(VectorSource(tweets2$text))
+mycorpus3 <- VCorpus(VectorSource(tweets3$text))
+
+
+removeURL <- function(x) gsub("http[[:alnum:]]*","",x)
+removeNumPunct <- function(x) gsub("[^[:alpha:][:space:]]*","",x) 
+```
+Istenmeyen Kelimeleri Cikaralim
+```{r}
+new_stop <- c(stopwords("en"),"rt","one","news")
+```
+```{r}
+clean_tweets <- tm_map(mycorpus,PlainTextDocument)
+clean_tweets1 <- tm_map(mycorpus1,PlainTextDocument)
+clean_tweets2 <- tm_map(mycorpus2,PlainTextDocument)
+clean_tweets3 <- tm_map(mycorpus3,PlainTextDocument)
+
+clean_tweets <- tm_map(clean_tweets,content_transformer(removeURL))
+clean_tweets <- tm_map(clean_tweets, stripWhitespace)
+clean_tweets <- tm_map(clean_tweets, content_transformer(tolower))
+clean_tweets <- tm_map(clean_tweets, removeWords, new_stop)
+clean_tweets <- tm_map(clean_tweets,content_transformer(removeNumPunct))
+clean_tweets <- tm_map(clean_tweets, removePunctuation)
+
+clean_tweets1 <- tm_map(clean_tweets1,content_transformer(removeURL))
+clean_tweets1 <- tm_map(clean_tweets1, stripWhitespace)
+clean_tweets1 <- tm_map(clean_tweets1, content_transformer(tolower))
+clean_tweets1 <- tm_map(clean_tweets1, removeWords, new_stop)
+clean_tweets1 <- tm_map(clean_tweets1,content_transformer(removeNumPunct))
+clean_tweets1 <- tm_map(clean_tweets1, removePunctuation)
+
+clean_tweets2 <- tm_map(clean_tweets2,content_transformer(removeURL))
+clean_tweets2 <- tm_map(clean_tweets2, stripWhitespace)
+clean_tweets2 <- tm_map(clean_tweets2, content_transformer(tolower))
+clean_tweets2 <- tm_map(clean_tweets2, removeWords, new_stop)
+clean_tweets2 <- tm_map(clean_tweets2,content_transformer(removeNumPunct))
+clean_tweets2 <- tm_map(clean_tweets2, removePunctuation)
+
+clean_tweets3 <- tm_map(clean_tweets3,content_transformer(removeURL))
+clean_tweets3 <- tm_map(clean_tweets3, stripWhitespace)
+clean_tweets3 <- tm_map(clean_tweets3, content_transformer(tolower))
+clean_tweets3 <- tm_map(clean_tweets3, removeWords, new_stop)
+clean_tweets3 <- tm_map(clean_tweets3,content_transformer(removeNumPunct))
+clean_tweets3 <- tm_map(clean_tweets3, removePunctuation)
+
+
+```
+Verideki 25. Tweeti Alalim ve Temizlik Gerceklesmis mi Kontrol Edelim
+```{r}
+tweets2$text[25] ## Temızlık Oncesı
+```
+```{r}
+clean_tweets2[[25]][1] ## Temızlık Sonrası
+```
+
+```{r message=FALSE, warning=FALSE}
+tweets_tdm <- TermDocumentMatrix(clean_tweets)
+tweets_tdm
+tweets_m <- as.matrix(tweets_tdm)
+dim(tweets_m)
+
+tweets_tdm1 <- TermDocumentMatrix(clean_tweets1)
+tweets_tdm1
+tweets_m1 <- as.matrix(tweets_tdm1)
+dim(tweets_m1)
+
+tweets_tdm2 <- TermDocumentMatrix(clean_tweets2)
+tweets_tdm2
+tweets_m2 <- as.matrix(tweets_tdm2)
+dim(tweets_m2)
+
+tweets_tdm3 <- TermDocumentMatrix(clean_tweets3)
+tweets_tdm3
+tweets_m3 <- as.matrix(tweets_tdm3)
+dim(tweets_m3)
+```
+
+## Kullanilan Kelime Coklugu ile WordCloud Olusturma
+```{r}
+##sık kullanılan kelımelerr
+term_frequency <- rowSums(tweets_m)
+term_frequency <- sort(term_frequency,decreasing = TRUE)
+term_frequency[1:10]
+
+term_frequency1 <- rowSums(tweets_m1)
+term_frequency1 <- sort(term_frequency1,decreasing = TRUE)
+term_frequency1[1:10]
+
+term_frequency2 <- rowSums(tweets_m2)
+term_frequency2 <- sort(term_frequency2,decreasing = TRUE)
+term_frequency2[1:10]
+
+term_frequency3 <- rowSums(tweets_m3)
+term_frequency3 <- sort(term_frequency3,decreasing = TRUE)
+term_frequency3[1:10]
+
+
+
+
+```
+En cok kullanilan kelimelerin BarPlotu
+```{r}
+par(mfrow=c(2,2))
+barplot(term_frequency[1:10],col ="tan", las = 2, main="Rusya Önce")
+barplot(term_frequency1[1:10],col ="tan", las = 2,main="Rusya Sonra")
+
+barplot(term_frequency2[1:10],col ="tan", las = 2,main="Ukrayna Önce")
+barplot(term_frequency3[1:10],col ="tan", las = 2,main="Ukrayna Sonra")
+
+```
+
+
+
+
+Kullanilan Kelimelerin Sklik Dagilimi
+```{r}
+##20 ve üzerı
+
+term_frequency <- subset(term_frequency,term_frequency >= 20)
+term_freq_df <- data.frame(term = names(term_frequency),freq = term_frequency)
+ggplot(term_freq_df,aes(x=term,y=freq)) +
+  geom_line(aes(group=1),colour="blue") +
+  geom_point(size = 3,colour = "pink2") +
+  xlab("Kelime") + ylab("Sıklık") + coord_flip()
+```
+
+WordCloud Olusturma
+```{r}
+#RUSYA İCİN
+par(mfrow=c(1,2))
+
+
+wordcloud(clean_tweets,min.freq = 2,scale = c(2,0.5) , colors =brewer.pal(12,"Paired"),
+          random.color = TRUE, random.order = FALSE, max.words = 200,main="Rusya Öncesi")
+wordcloud(clean_tweets1,min.freq = 2,scale = c(2,0.5) , colors =brewer.pal(12,"Paired"),
+          random.color = TRUE, random.order = FALSE, max.words = 200,main="Rusya Sonrası")
+
+
+```
+```{r message=FALSE, warning=FALSE}
+#UKRAYNA ICIN
+par(mfrow=c(1,2))
+
+
+wordcloud(clean_tweets2,min.freq = 2,scale = c(2,0.5) , colors =brewer.pal(12,"Paired"),
+          random.color = TRUE, random.order = FALSE, max.words = 200)
+wordcloud(clean_tweets3,min.freq = 2,scale = c(2,0.5) , colors =brewer.pal(12,"Paired"),
+          random.color = TRUE, random.order = FALSE, max.words = 200)
+```
+
+
+
+
+
+
+
+
+
+
+
